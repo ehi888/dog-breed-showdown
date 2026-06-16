@@ -411,8 +411,16 @@ async function buildQuestions(n){
 }
 
 // ---------- Room lifecycle ----------
+async function uniqueCode(){
+  for (let i = 0; i < 12; i++){
+    const code = genCode();
+    const snap = await db.ref(ROOT + "/" + code).once("value");
+    if (!snap.exists()) return code;
+  }
+  return genCode(); // fallback after many collisions (vanishingly unlikely)
+}
 async function createRoom(name){
-  myId = genId(); isHost = true; myCode = genCode();
+  myId = genId(); isHost = true; myCode = await uniqueCode();
   roomRef = db.ref(ROOT + "/" + myCode);
   const players = {}; players[myId] = { name: name, score: 0, joinedAt: TS };
   await roomRef.set({
