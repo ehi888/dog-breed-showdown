@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dog Breed Showdown</title>
+<!-- Firebase (same project as Book Race, rooms namespaced under dog-rooms/) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --fi-yellow: #FFFA01;
+    --fi-black: #000000;
+    --fi-white: #FFFFFF;
+    --bg: #FAFAFA;
+    --surface: #FFFFFF;
+    --border: #E0E0E0;
+    --gray-50: #F5F5F2;
+    --gray-400: #737373;
+    --gray-500: #3C3C3C;
+    --gray-600: #242424;
+    --green: #12CF75;
+    --red: #FB6A6A;
+    --blue: #45B0FD;
+    --purple: #CA66FE;
+    --card-radius: 16px;
+    --block-radius: 24px;
+    --shadow: 0px 0px 20px 0px rgba(0,0,0,0.06);
+    --ease: cubic-bezier(0.25, 0.4, 0.25, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Messina Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--gray-600);
+    display: flex; align-items: flex-start; justify-content: center; min-height: 100vh;
+  }
+  .app { width: 100%; max-width: 1000px; padding: 24px; }
+  .screen { display: none; }
+  .screen.active { display: block; }
+  .center { text-align: center; }
+
+  .brandmark {
+    display: inline-block; background: var(--fi-black); color: var(--fi-yellow);
+    font-size: 11px; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase;
+    padding: 6px 13px; border-radius: 6px; margin-bottom: 22px;
+  }
+  .logo { font-size: 56px; font-weight: 800; letter-spacing: -2px; line-height: 1.0; color: var(--fi-black); }
+  .tag { color: var(--gray-400); margin: 16px 0 36px; font-size: 18px; }
+
+  .btn {
+    background: var(--fi-yellow); color: var(--fi-black); border: none;
+    padding: 16px 40px; font-size: 19px; font-weight: 800; border-radius: 999px;
+    cursor: pointer; font-family: inherit; transition: transform .12s var(--ease);
+    box-shadow: var(--shadow);
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  .btn.ghost { background: transparent; color: var(--gray-600); border: 1.5px solid var(--border); box-shadow: none; }
+
+  /* ---------- Landing ---------- */
+  .landing { padding-top: 30px; }
+  .actions { display: flex; flex-direction: column; align-items: center; gap: 18px; margin-top: 10px; }
+  .join-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--block-radius);
+    box-shadow: var(--shadow); padding: 22px; width: 340px; max-width: 100%;
+  }
+  .join-card h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gray-400); margin-bottom: 14px; }
+  .field {
+    width: 100%; background: var(--gray-50); border: 1px solid var(--border); border-radius: 12px;
+    padding: 13px 15px; color: var(--gray-600); font-size: 18px; font-family: inherit; outline: none; margin-bottom: 12px;
+    transition: border-color .15s var(--ease);
+  }
+  .field:focus { border-color: var(--fi-black); }
+  .field.code { text-transform: uppercase; letter-spacing: 6px; font-weight: 800; text-align: center; font-size: 24px; }
+  .or { color: var(--gray-400); font-size: 14px; letter-spacing: 2px; }
+  .err { color: var(--red); font-weight: 600; min-height: 22px; margin-top: 6px; }
+  .hint { color: var(--gray-400); font-size: 14px; margin-top: 24px; max-width: 460px; }
+
+  /* ---------- Lobby ---------- */
+  .code-box {
+    background: var(--fi-black); color: var(--fi-yellow); border-radius: var(--block-radius);
+    padding: 26px 20px; margin: 8px auto 22px; display: inline-block; min-width: 320px;
+  }
+  .code-box .clabel { font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,.5); margin-bottom: 8px; }
+  .code-box .code { font-size: 72px; font-weight: 800; letter-spacing: 14px; line-height: 1; }
+  .roster { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 18px 0 26px; min-height: 44px; }
+  .pchip {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    padding: 9px 18px; font-weight: 700; box-shadow: var(--shadow);
+  }
+  .rounds { margin: 8px 0 26px; }
+  .rounds span { color: var(--gray-400); margin-right: 12px; }
+  .chip {
+    background: var(--surface); border: 1px solid var(--border); color: var(--gray-600);
+    padding: 8px 18px; border-radius: 999px; font-size: 16px; cursor: pointer; font-family: inherit; margin: 0 4px;
+    transition: all .15s var(--ease);
+  }
+  .chip.active { background: var(--fi-yellow); color: var(--fi-black); border-color: var(--fi-yellow); font-weight: 700; }
+
+  /* ---------- Game (shared) ---------- */
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; }
+  .minicode { background: var(--fi-black); color: var(--fi-yellow); border-radius: 10px; padding: 7px 13px; font-weight: 800; letter-spacing: 3px; }
+  .round-pill { text-align: center; }
+  .round-pill .r { font-size: 12px; color: var(--gray-400); letter-spacing: 1.5px; text-transform: uppercase; font-weight: 700; }
+  .round-pill .rn { font-size: 20px; font-weight: 700; }
+  .myscore { font-weight: 700; color: var(--gray-500); }
+  .myscore b { color: var(--fi-black); font-size: 20px; }
+
+  .photo-wrap {
+    width: 100%; height: 460px; border-radius: var(--block-radius); overflow: hidden;
+    background: var(--gray-50); display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px; position: relative; box-shadow: var(--shadow);
+  }
+  .photo-wrap.small { height: 300px; }
+  .photo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+  .timer-bar { position: absolute; bottom: 0; left: 0; height: 6px; background: var(--fi-yellow); width: 100%; transition: width .1s linear; }
+
+  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .opt {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--card-radius);
+    padding: 16px 18px; display: flex; align-items: center; gap: 14px; font-size: 19px;
+    position: relative; transition: background .15s var(--ease), border-color .15s var(--ease);
+    color: var(--gray-600); font-weight: 600;
+  }
+  .opt.tappable { cursor: pointer; }
+  .opt.tappable:hover { border-color: var(--fi-black); }
+  .opt .label { flex: 1; }
+  .opt .letter {
+    width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 16px; background: var(--gray-50); border: 1px solid var(--border);
+  }
+  .opt .tally { color: var(--gray-400); font-weight: 700; font-size: 15px; }
+  .opt.mine { border-color: var(--fi-black); background: #FFFEF0; }
+  .opt.correct { background: rgba(18,207,117,.16); border-color: var(--green); }
+  .opt.wrong { background: rgba(251,106,106,.14); border-color: var(--red); }
+
+  .status { text-align: center; margin-top: 18px; min-height: 28px; font-size: 17px; color: var(--gray-500); font-weight: 600; }
+  .host-controls { text-align: center; margin-top: 18px; }
+  .answered-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+  .aled { background: var(--green); color: #fff; border-radius: 999px; padding: 5px 13px; font-weight: 700; font-size: 13px; }
+  .awaiting { background: var(--gray-50); color: var(--gray-400); border: 1px solid var(--border); border-radius: 999px; padding: 5px 13px; font-weight: 700; font-size: 13px; }
+
+  .waitbox { text-align: center; padding: 40px 0; }
+  .spinner { width: 48px; height: 48px; border: 5px solid var(--border); border-top-color: var(--fi-yellow); border-radius: 50%; margin: 0 auto 18px; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Leaderboard ---------- */
+  .lb { max-width: 520px; margin: 24px auto; }
+  .lb-row {
+    display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--card-radius); padding: 16px 20px; margin-bottom: 12px; box-shadow: var(--shadow);
+  }
+  .lb-row.first { border-top: 6px solid var(--fi-yellow); }
+  .lb-rank { font-size: 24px; font-weight: 800; color: var(--gray-400); width: 42px; }
+  .lb-row.first .lb-rank { color: var(--fi-black); }
+  .lb-name { flex: 1; font-size: 20px; font-weight: 700; text-align: left; }
+  .lb-score { font-size: 24px; font-weight: 800; }
+
+  @media (max-width: 600px) {
+    .app { padding: 16px; }
+    .options { grid-template-columns: 1fr; }
+    .photo-wrap { height: 300px; }
+    .photo-wrap.small { height: 220px; }
+    .logo { font-size: 40px; }
+    .code-box .code { font-size: 56px; letter-spacing: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- LANDING -->
+  <section id="s-landing" class="screen active center landing">
+    <div class="brandmark">Fi · Office Game</div>
+    <h1 class="logo">Dog Breed Showdown</h1>
+    <p class="tag">Spot the breed from the photo. Everyone plays from their phone.</p>
+
+    <div class="actions">
+      <button id="createBtn" class="btn">Host a Game</button>
+      <span class="or">— OR —</span>
+      <div class="join-card">
+        <h3>Join with a code</h3>
+        <input id="joinName" class="field" type="text" placeholder="Your name" maxlength="16" autocomplete="off" />
+        <input id="joinCode" class="field code" type="text" placeholder="CODE" maxlength="4" autocomplete="off" spellcheck="false" />
+        <button id="joinBtn" class="btn" style="width:100%">Join Game</button>
+      </div>
+      <div class="err" id="landingErr"></div>
+    </div>
+    <p class="hint">Host on a laptop or shared screen, then share the 4-letter code. Players join from any device, including remotely.</p>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="s-lobby" class="screen center">
+    <div class="brandmark">Waiting Room</div>
+    <div class="code-box">
+      <div class="clabel">Room code</div>
+      <div class="code" id="lobbyCode">----</div>
+    </div>
+    <p class="tag" id="lobbyInstruct">Share this code. Players join from their phones.</p>
+    <div class="roster" id="roster"></div>
+    <div id="hostLobby">
+      <div class="rounds">
+        <span>Rounds:</span>
+        <button class="chip" data-rounds="5">5</button>
+        <button class="chip active" data-rounds="10">10</button>
+        <button class="chip" data-rounds="15">15</button>
+      </div>
+      <button id="startBtn" class="btn" disabled>Start Showdown</button>
+      <p class="hint" id="startHint">Need at least one player to start.</p>
+    </div>
+    <div id="playerLobby" style="display:none">
+      <div class="spinner"></div>
+      <p class="tag">You're in. Waiting for the host to start…</p>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="s-game" class="screen">
+    <div class="topbar">
+      <div class="minicode" id="gameCode">----</div>
+      <div class="round-pill">
+        <div class="r">Round</div>
+        <div class="rn"><span id="roundNow">1</span> / <span id="roundTotal">10</span></div>
+      </div>
+      <div class="myscore" id="myScoreBox"></div>
+    </div>
+
+    <div class="photo-wrap" id="photoWrap">
+      <img id="dogImg" alt="Mystery dog" />
+      <div class="timer-bar" id="timerBar"></div>
+    </div>
+
+    <div class="options" id="options"></div>
+    <div class="answered-row" id="answeredRow"></div>
+    <div class="status" id="status"></div>
+    <div class="host-controls" id="hostControls"></div>
+  </section>
+
+  <!-- FINISHED -->
+  <section id="s-finished" class="screen center">
+    <div class="brandmark">Final Results</div>
+    <h1 class="logo" id="champLine">Showdown over</h1>
+    <div class="lb" id="leaderboard"></div>
+    <button id="rematchBtn" class="btn ghost">Back to Lobby</button>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+
+// ---------- Firebase (Book Race project, dog-rooms namespace) ----------
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBfyFmGyO7wWmPZDnhb2Eomn75cxpBWHjg",
+  authDomain: "book-club-race.firebaseapp.com",
+  databaseURL: "https://book-club-race-default-rtdb.firebaseio.com",
+  projectId: "book-club-race",
+  storageBucket: "book-club-race.firebasestorage.app",
+  messagingSenderId: "269360658279",
+  appId: "1:269360658279:web:27fe34872a072ebd7f21c2",
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+const TS = firebase.database.ServerValue.TIMESTAMP;
+
+// ---------- Config ----------
+const CORRECT_POINTS = 10;
+const SPEED_BONUS = 5;
+const ROUND_TIME = 14;          // seconds players have to answer
+const REVEAL_HOLD = 3500;       // ms host shows the answer before Next is offered
+const ROOT = "dog-rooms";
+const LETTERS = ["A","B","C","D"];
+const PRETTY = {
+  germanshepherd: "German Shepherd", bullterrier: "Bull Terrier",
+  mexicanhairless: "Mexican Hairless", stbernard: "St. Bernard",
+  cotondetulear: "Coton de Tulear", africanwild: "African Wild Dog"
+};
+
+// ---------- State ----------
+let roomRef = null;
+let myId = null;
+let isHost = false;
+let myCode = null;
+let room = null;
+let pendingRounds = 10;
+
+// host-only locals
+let pool = [];
+let revealedRounds = new Set();
+let hostTimerRound = -1;
+let hostTimeout = null;
+
+// client display timer
+let displayInterval = null;
+let displayRoundShown = -1;
+
+// ---------- Helpers ----------
+const $ = (id) => document.getElementById(id);
+function showScreen(id){
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  $(id).classList.add("active");
+}
+function cap(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+function prettify(breed, sub){
+  if (PRETTY[breed] && !sub) return PRETTY[breed];
+  if (sub) return cap(sub) + " " + cap(breed);
+  return cap(breed);
+}
+function shuffle(arr){ const a = arr.slice(); for (let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function genCode(){ const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let x=""; for(let i=0;i<4;i++) x+=c[Math.floor(Math.random()*c.length)]; return x; }
+function genId(){ return "p_" + Math.random().toString(36).substr(2,9); }
+function playersOf(r){ return r && r.players ? r.players : {}; }
+function playerList(r){ return Object.entries(playersOf(r)).map(([id,p]) => ({id, ...p})); }
+
+// ---------- Build questions (host) ----------
+async function buildPool(){
+  const res = await fetch("https://dog.ceo/api/breeds/list/all");
+  const data = await res.json();
+  const list = [];
+  for (const [breed, subs] of Object.entries(data.message)){
+    if (!subs.length) list.push({ path: breed, label: prettify(breed) });
+    else subs.forEach(sub => list.push({ path: breed+"/"+sub, label: prettify(breed, sub) }));
+  }
+  return list;
+}
+async function randomImage(path){
+  const res = await fetch("https://dog.ceo/api/breed/"+path+"/images/random");
+  const data = await res.json();
+  return data.message;
+}
+async function buildQuestions(n){
+  if (!pool.length) pool = await buildPool();
+  const used = new Set();
+  const qs = [];
+  for (let i=0;i<n;i++){
+    let correct, attempts=0;
+    do { correct = pick(pool); attempts++; } while (used.has(correct.path) && attempts<30);
+    used.add(correct.path);
+    const others = shuffle(pool.filter(b => b.path !== correct.path)).slice(0,3);
+    const opts = shuffle([correct, ...others]);
+    let image; try { image = await randomImage(correct.path); } catch(e){ image = ""; }
+    qs.push({ image, options: opts.map(o => o.label), correctIdx: opts.findIndex(o => o.path === correct.path) });
+    if (isHost) $("startBtn").textContent = `Loading photos… ${i+1}/${n}`;
+  }
+  return qs;
+}
+
+// ---------- Room lifecycle ----------
+async function createRoom(){
+  myId = genId(); isHost = true; myCode = genCode();
+  roomRef = db.ref(ROOT + "/" + myCode);
+  await roomRef.set({
+    code: myCode, createdAt: TS, host: myId,
+    state: "lobby", round: 0, totalRounds: pendingRounds, revealed: false,
+    questions: null, players: {}
+  });
+  listen();
+  history.replaceState(null, "", "?room=" + myCode);
+}
+async function joinRoom(code, name){
+  code = code.toUpperCase().trim();
+  myId = genId(); isHost = false; myCode = code;
+  roomRef = db.ref(ROOT + "/" + code);
+  const snap = await roomRef.once("value");
+  if (!snap.exists()) throw new Error("Room not found");
+  const r = snap.val();
+  if (r.state !== "lobby") throw new Error("That game already started");
+  if (Object.keys(playersOf(r)).length >= 12) throw new Error("Room is full");
+  await roomRef.child("players/" + myId).set({ name: name, score: 0, joinedAt: TS });
+  roomRef.child("players/" + myId).onDisconnect().remove();
+  listen();
+  history.replaceState(null, "", "?room=" + code);
+}
+function listen(){
+  roomRef.on("value", (snap) => {
+    room = snap.val();
+    if (!room){ alert("The host closed this room."); location.href = location.pathname; return; }
+    render();
+  });
+}
+
+// ---------- Host: start + flow ----------
+async function hostStart(){
+  $("startBtn").disabled = true;
+  const qs = await buildQuestions(room.totalRounds);
+  revealedRounds = new Set();
+  await roomRef.update({ questions: qs, state: "playing", round: 0, revealed: false, roundStartAt: TS });
+}
+async function hostReveal(){
+  const rd = room.round;
+  if (revealedRounds.has(rd)) return;
+  revealedRounds.add(rd);
+  const q = room.questions[rd];
+  const ps = playersOf(room);
+  let earliest = null;
+  for (const pid in ps){
+    const a = ps[pid].answers && ps[pid].answers[rd];
+    if (a && a.opt === q.correctIdx && (!earliest || a.at < earliest.at)) earliest = { pid, at: a.at };
+  }
+  const updates = { revealed: true };
+  for (const pid in ps){
+    const a = ps[pid].answers && ps[pid].answers[rd];
+    let add = 0;
+    if (a && a.opt === q.correctIdx){ add += CORRECT_POINTS; if (earliest && earliest.pid === pid) add += SPEED_BONUS; }
+    updates["players/" + pid + "/score"] = (ps[pid].score || 0) + add;
+  }
+  await roomRef.update(updates);
+}
+async function hostNext(){
+  const next = room.round + 1;
+  if (next >= room.totalRounds){ await roomRef.update({ state: "finished" }); }
+  else { await roomRef.update({ round: next, revealed: false, roundStartAt: TS }); }
+}
+function hostBackToLobby(){
+  // clear answers + scores, reset state
+  const ps = playersOf(room); const updates = { state: "lobby", round: 0, revealed: false, questions: null };
+  for (const pid in ps){ updates["players/"+pid+"/score"] = 0; updates["players/"+pid+"/answers"] = null; }
+  revealedRounds = new Set();
+  roomRef.update(updates);
+}
+
+// ---------- Player: answer ----------
+function submitAnswer(optIdx){
+  if (!room || room.state !== "playing" || room.revealed) return;
+  const mine = playersOf(room)[myId];
+  if (mine && mine.answers && mine.answers[room.round] != null) return; // already answered
+  roomRef.child("players/" + myId + "/answers/" + room.round).set({ opt: optIdx, at: TS });
+}
+
+// ---------- Render ----------
+function render(){
+  if (!room) return;
+  if (room.state === "lobby") renderLobby();
+  else if (room.state === "playing") renderGame();
+  else if (room.state === "finished") renderFinished();
+
+  // host flow automation
+  if (isHost && room.state === "playing" && !room.revealed) maybeHostTimer();
+}
+
+function renderLobby(){
+  showScreen("s-lobby");
+  $("lobbyCode").textContent = room.code;
+  $("gameCode").textContent = room.code;
+  const list = playerList(room);
+  $("roster").innerHTML = list.length
+    ? list.map(p => `<span class="pchip">${escapeHtml(p.name)}</span>`).join("")
+    : `<span class="awaiting">No players yet…</span>`;
+  $("hostLobby").style.display = isHost ? "block" : "none";
+  $("playerLobby").style.display = isHost ? "none" : "block";
+  $("lobbyInstruct").textContent = isHost
+    ? "Share this code. Players join from their phones."
+    : "You're in — waiting on the host.";
+  if (isHost){
+    const n = list.length;
+    $("startBtn").disabled = n < 1;
+    $("startBtn").textContent = "Start Showdown";
+    $("startHint").textContent = n < 1 ? "Need at least one player to start." : `${n} player${n>1?"s":""} ready.`;
+  }
+}
+
+function renderGame(){
+  showScreen("s-game");
+  const rd = room.round;
+  const q = room.questions[rd];
+  $("gameCode").textContent = room.code;
+  $("roundNow").textContent = rd + 1;
+  $("roundTotal").textContent = room.totalRounds;
+
+  // photo
+  $("photoWrap").classList.toggle("small", !isHost);
+  if ($("dogImg").src !== q.image) $("dogImg").src = q.image || "";
+
+  const mine = playersOf(room)[myId];
+  const myAns = mine && mine.answers && mine.answers[rd] != null ? mine.answers[rd].opt : null;
+
+  // my score (players only)
+  $("myScoreBox").innerHTML = (!isHost && mine) ? `Your score <b>${mine.score || 0}</b>` : (isHost ? "Host view" : "");
+
+  // options
+  const optsEl = $("options");
+  // count answers per option (host insight)
+  const counts = [0,0,0,0]; let answeredCount = 0;
+  const ps = playersOf(room);
+  for (const pid in ps){
+    const a = ps[pid].answers && ps[pid].answers[rd];
+    if (a){ counts[a.opt]++; answeredCount++; }
+  }
+  optsEl.innerHTML = "";
+  q.options.forEach((label, i) => {
+    const div = document.createElement("div");
+    let cls = "opt";
+    if (!isHost && !room.revealed) cls += " tappable";
+    if (room.revealed && i === q.correctIdx) cls += " correct";
+    if (room.revealed && myAns === i && i !== q.correctIdx) cls += " wrong";
+    if (!room.revealed && myAns === i) cls += " mine";
+    div.className = cls;
+    div.innerHTML = `
+      <span class="letter">${LETTERS[i]}</span>
+      <span class="label">${escapeHtml(label)}</span>
+      ${ isHost ? `<span class="tally">${counts[i] || ""}</span>` : "" }`;
+    if (!isHost && !room.revealed) div.addEventListener("click", () => submitAnswer(i));
+    optsEl.appendChild(div);
+  });
+
+  // answered roster (host) / lock state (player)
+  if (isHost){
+    $("answeredRow").innerHTML = playerList(room).map(p => {
+      const a = p.answers && p.answers[rd] != null;
+      return `<span class="${a ? "aled" : "awaiting"}">${escapeHtml(p.name)}${a ? " ✓" : ""}</span>`;
+    }).join("");
+  } else {
+    $("answeredRow").innerHTML = "";
+  }
+
+  // status
+  if (room.revealed){
+    const correctLabel = q.options[q.correctIdx];
+    if (isHost) $("status").textContent = `It's a ${correctLabel}.`;
+    else {
+      const got = myAns === q.correctIdx;
+      $("status").textContent = myAns == null ? `Time! It was a ${correctLabel}.`
+        : got ? `Correct — it's a ${correctLabel}.` : `It was a ${correctLabel}.`;
+    }
+  } else {
+    if (isHost) $("status").textContent = `${answeredCount} of ${playerList(room).length} locked in`;
+    else $("status").textContent = myAns == null ? "Tap your answer!" : "Locked in. Waiting for the reveal…";
+  }
+
+  // host controls
+  const hc = $("hostControls");
+  if (isHost){
+    if (room.revealed){
+      const last = rd + 1 >= room.totalRounds;
+      hc.innerHTML = `<button class="btn" id="nextBtn">${last ? "See Results" : "Next Round"}</button>`;
+      $("nextBtn").addEventListener("click", hostNext);
+    } else {
+      hc.innerHTML = `<button class="btn ghost" id="revealBtn">Reveal Now</button>`;
+      $("revealBtn").addEventListener("click", () => { clearTimeout(hostTimeout); hostReveal(); });
+    }
+  } else { hc.innerHTML = ""; }
+
+  // client-side countdown bar
+  runDisplayTimer(rd);
+}
+
+function maybeHostTimer(){
+  const rd = room.round;
+  const list = playerList(room);
+  const allAnswered = list.length > 0 && list.every(p => p.answers && p.answers[rd] != null);
+  if (allAnswered && !revealedRounds.has(rd)){ clearTimeout(hostTimeout); hostReveal(); return; }
+  if (hostTimerRound !== rd){
+    hostTimerRound = rd;
+    clearTimeout(hostTimeout);
+    hostTimeout = setTimeout(() => { if (room && room.round === rd && !room.revealed) hostReveal(); }, ROUND_TIME * 1000);
+  }
+}
+
+function runDisplayTimer(rd){
+  if (room.revealed){ clearInterval(displayInterval); $("timerBar").style.width = "0%"; return; }
+  if (displayRoundShown === rd && displayInterval) return;
+  displayRoundShown = rd;
+  clearInterval(displayInterval);
+  const start = Date.now();
+  $("timerBar").style.width = "100%";
+  displayInterval = setInterval(() => {
+    const elapsed = (Date.now() - start) / 1000;
+    const pct = Math.max(0, (1 - elapsed / ROUND_TIME) * 100);
+    $("timerBar").style.width = pct + "%";
+    if (pct <= 0) clearInterval(displayInterval);
+  }, 100);
+}
+
+function renderFinished(){
+  showScreen("s-finished");
+  clearInterval(displayInterval);
+  const ranked = playerList(room).sort((a,b) => (b.score||0) - (a.score||0));
+  $("champLine").textContent = ranked.length ? `${ranked[0].name} wins` : "Showdown over";
+  $("leaderboard").innerHTML = ranked.map((p,i) => `
+    <div class="lb-row ${i===0 ? "first" : ""}">
+      <span class="lb-rank">${i+1}</span>
+      <span class="lb-name">${escapeHtml(p.name)}</span>
+      <span class="lb-score">${p.score || 0}</span>
+    </div>`).join("");
+  $("rematchBtn").style.display = isHost ? "inline-block" : "none";
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+
+// ---------- Wiring ----------
+document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
+  document.querySelectorAll(".chip").forEach(x => x.classList.remove("active"));
+  c.classList.add("active");
+  pendingRounds = parseInt(c.dataset.rounds, 10);
+  if (roomRef && isHost) roomRef.update({ totalRounds: pendingRounds });
+}));
+
+$("createBtn").addEventListener("click", () => {
+  createRoom().catch(e => $("landingErr").textContent = e.message);
+});
+$("joinBtn").addEventListener("click", () => {
+  $("landingErr").textContent = "";
+  const name = $("joinName").value.trim();
+  const code = $("joinCode").value.trim();
+  if (!name) { $("landingErr").textContent = "Enter your name first."; return; }
+  if (code.length < 4) { $("landingErr").textContent = "Enter the 4-letter code."; return; }
+  joinRoom(code, name).catch(e => $("landingErr").textContent = e.message);
+});
+$("joinCode").addEventListener("input", e => e.target.value = e.target.value.toUpperCase());
+$("startBtn").addEventListener("click", () => hostStart().catch(e => alert(e.message)));
+$("rematchBtn").addEventListener("click", hostBackToLobby);
+
+// prefill code from URL (?room=ABCD) for quick join
+(function(){
+  const p = new URLSearchParams(location.search);
+  const r = p.get("room");
+  if (r) $("joinCode").value = r.toUpperCase().slice(0,4);
+})();
+</script>
+</body>
+</html>
