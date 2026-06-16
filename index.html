@@ -150,7 +150,7 @@
     border: 4px solid var(--gold); box-shadow: 0 0 0 2px var(--navy-deep), 0 0 44px rgba(243,193,75,0.28);
   }
   .photo-wrap.small { height: 300px; }
-  .photo-wrap img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-wrap img { width: 100%; height: 100%; object-fit: contain; }
   .photo-wrap::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 42%; background: linear-gradient(180deg, rgba(243,193,75,0.22), transparent); pointer-events: none; z-index: 2; }
   .timer-bar { position: absolute; bottom: 0; left: 0; height: 7px; background: linear-gradient(90deg, var(--gold-bright), var(--gold)); width: 100%; transition: width .1s linear; z-index: 3; box-shadow: 0 0 12px rgba(255,213,90,0.7); }
 
@@ -220,11 +220,11 @@
     <p class="tag">Spot the breed. Beat the room. Take the crown. Everybody plays from their phone.</p>
 
     <div class="actions">
+      <input id="playerName" class="field" type="text" placeholder="Your name" maxlength="16" autocomplete="off" style="width:360px;max-width:100%" />
       <button id="createBtn" class="btn">Host the Show</button>
       <span class="or">— OR —</span>
       <div class="join-card">
         <h3>Join with a code</h3>
-        <input id="joinName" class="field" type="text" placeholder="Your name" maxlength="16" autocomplete="off" />
         <input id="joinCode" class="field code" type="text" placeholder="CODE" maxlength="4" autocomplete="off" spellcheck="false" />
         <button id="joinBtn" class="btn" style="width:100%">Take the Stage</button>
       </div>
@@ -399,14 +399,16 @@ async function buildQuestions(n){
 }
 
 // ---------- Room lifecycle ----------
-async function createRoom(){
+async function createRoom(name){
   myId = genId(); isHost = true; myCode = genCode();
   roomRef = db.ref(ROOT + "/" + myCode);
+  const players = {}; players[myId] = { name: name, score: 0, joinedAt: TS };
   await roomRef.set({
     code: myCode, createdAt: TS, host: myId,
     state: "lobby", round: 0, totalRounds: pendingRounds, revealed: false,
-    questions: null, players: {}
+    questions: null, players: players
   });
+  roomRef.child("players/" + myId).onDisconnect().remove();
   listen();
   history.replaceState(null, "", "?room=" + myCode);
 }
@@ -527,8 +529,8 @@ function renderGame(){
   const mine = playersOf(room)[myId];
   const myAns = mine && mine.answers && mine.answers[rd] != null ? mine.answers[rd].opt : null;
 
-  // my score (players only)
-  $("myScoreBox").innerHTML = (!isHost && mine) ? `Your score <b>${mine.score || 0}</b>` : (isHost ? "Host view" : "");
+  // my score (host plays too)
+  $("myScoreBox").innerHTML = mine ? `Your score <b>${mine.score || 0}</b>` : "";
 
   // options
   const optsEl = $("options");
@@ -542,8 +544,9 @@ function renderGame(){
   optsEl.innerHTML = "";
   q.options.forEach((label, i) => {
     const div = document.createElement("div");
+    const canTap = !room.revealed && myAns == null;
     let cls = "opt";
-    if (!isHost && !room.revealed) cls += " tappable";
+    if (canTap) cls += " tappable";
     if (room.revealed && i === q.correctIdx) cls += " correct";
     if (room.revealed && myAns === i && i !== q.correctIdx) cls += " wrong";
     if (!room.revealed && myAns === i) cls += " mine";
@@ -551,8 +554,8 @@ function renderGame(){
     div.innerHTML = `
       <span class="letter">${LETTERS[i]}</span>
       <span class="label">${escapeHtml(label)}</span>
-      ${ isHost ? `<span class="tally">${counts[i] || ""}</span>` : "" }`;
-    if (!isHost && !room.revealed) div.addEventListener("click", () => submitAnswer(i));
+      ${ isHost && room.revealed ? `<span class="tally">${counts[i] || ""}</span>` : "" }`;
+    if (canTap) div.addEventListener("click", () => submitAnswer(i));
     optsEl.appendChild(div);
   });
 
@@ -576,8 +579,12 @@ function renderGame(){
         : got ? `Correct! It's a ${correctLabel}.` : `It was a ${correctLabel}.`;
     }
   } else {
-    if (isHost) $("status").textContent = `${answeredCount} of ${playerList(room).length} locked in`;
-    else $("status").textContent = myAns == null ? "Tap your answer!" : "Locked in. Waiting for the reveal…";
+    if (isHost){
+      const tail = `${answeredCount} of ${playerList(room).length} locked in`;
+      $("status").textContent = myAns == null ? `Tap your answer!  ·  ${tail}` : tail;
+    } else {
+      $("status").textContent = myAns == null ? "Tap your answer!" : "Locked in. Waiting for the reveal…";
+    }
   }
 
   // host controls
@@ -649,11 +656,14 @@ document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () =
 }));
 
 $("createBtn").addEventListener("click", () => {
-  createRoom().catch(e => $("landingErr").textContent = e.message);
+  $("landingErr").textContent = "";
+  const name = $("playerName").value.trim();
+  if (!name) { $("landingErr").textContent = "Enter your name first."; return; }
+  createRoom(name).catch(e => $("landingErr").textContent = e.message);
 });
 $("joinBtn").addEventListener("click", () => {
   $("landingErr").textContent = "";
-  const name = $("joinName").value.trim();
+  const name = $("playerName").value.trim();
   const code = $("joinCode").value.trim();
   if (!name) { $("landingErr").textContent = "Enter your name first."; return; }
   if (code.length < 4) { $("landingErr").textContent = "Enter the 4-letter code."; return; }
