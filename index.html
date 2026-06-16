@@ -44,6 +44,16 @@
   .screen.active { display: block; }
   .center { text-align: center; }
 
+  .sound-toggle {
+    position: fixed; top: 16px; right: 16px; z-index: 50;
+    width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
+    background: var(--navy-deep); border: 2px solid var(--gold); color: var(--gold-bright);
+    font-size: 20px; line-height: 1; box-shadow: 0 0 18px rgba(243,193,75,0.28);
+    transition: transform .12s var(--ease), background .15s var(--ease);
+  }
+  .sound-toggle:hover { transform: scale(1.08); }
+  .sound-toggle.muted { color: var(--muted); border-color: rgba(243,193,75,0.35); box-shadow: none; opacity: .8; }
+
   /* ---------- Marquee bulbs ---------- */
   .bulbs {
     height: 13px; position: absolute; left: 8px; right: 8px;
@@ -205,6 +215,8 @@
 </style>
 </head>
 <body>
+<audio id="bgm" loop preload="auto" src="gameshow.mp3"></audio>
+<button id="soundBtn" class="sound-toggle" title="Toggle music" aria-label="Toggle music">♪</button>
 <div class="app">
 
   <!-- LANDING -->
@@ -647,6 +659,18 @@ function renderFinished(){
 
 function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
 
+// ---------- Music ----------
+const bgm = $("bgm");
+let musicOn = true;
+bgm.volume = 0.32;
+function startMusic(){ if (musicOn) bgm.play().catch(() => {}); }
+$("soundBtn").addEventListener("click", () => {
+  musicOn = !musicOn;
+  $("soundBtn").classList.toggle("muted", !musicOn);
+  $("soundBtn").textContent = musicOn ? "♪" : "✕";
+  if (musicOn) bgm.play().catch(() => {}); else bgm.pause();
+});
+
 // ---------- Wiring ----------
 document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
   document.querySelectorAll(".chip").forEach(x => x.classList.remove("active"));
@@ -659,10 +683,12 @@ $("createBtn").addEventListener("click", () => {
   $("landingErr").textContent = "";
   const name = $("playerName").value.trim();
   if (!name) { $("landingErr").textContent = "Enter your name first."; return; }
+  startMusic();
   createRoom(name).catch(e => $("landingErr").textContent = e.message);
 });
 $("joinBtn").addEventListener("click", () => {
   $("landingErr").textContent = "";
+  startMusic();
   const name = $("playerName").value.trim();
   const code = $("joinCode").value.trim();
   if (!name) { $("landingErr").textContent = "Enter your name first."; return; }
